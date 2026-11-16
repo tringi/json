@@ -16,7 +16,7 @@ Supports several extensions and unescaping into UTF-8.
 
 ## Unified syntax
 
-`[key1 [key2 [...]] ":"] [value1 [value2 [...]]] ["{" | "["] [element [, [element]]] ["}" | "]"] [","]`
+`[key1 [key2 [...]] ":"] [value1 [value2 [...]]] ["{" | "["] [element ["," [element]]] ["}" | "]"] [","]`
 
 * key - one or more tokens, separated from value by `:` character
 * value - one or more tokens
