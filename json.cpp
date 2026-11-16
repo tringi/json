@@ -93,10 +93,10 @@ namespace {
                             const auto o = offset++;
 
                             if (p) {
-                                this->results.elements.resize (this->results.elements.size () + 1);
-                                this->results.elements.back ().key = this->result.key;
-                                this->results.elements.back ().value = this->result.value;
-                                this->results.elements.back ().line = this->result.line;
+                                this->results.objects.resize (this->results.objects.size () + 1);
+                                this->results.objects.back ().key = this->result.key;
+                                this->results.objects.back ().value = this->result.value;
+                                this->results.objects.back ().line = this->result.line;
                             }
 
                             this->nesting.push_back (text [o] == '[');
@@ -110,7 +110,7 @@ namespace {
                                     result.body = text.substr (o, offset - o);
                                 } else
                                 if (p) {
-                                    this->results.elements.back ().body = text.substr (o, offset - o);
+                                    this->results.objects.back ().body = text.substr (o, offset - o);
                                 }
 
                                 if (filter && (filter->next == nullptr))
@@ -220,8 +220,8 @@ namespace {
             // TODO: testing for empty result is temporary workaround for a bug somewhere
             //       passing wrong items here or not cleaning up something somewhere
 
-            if (!this->results.elements.empty () && this->result) {
-                this->results.elements.back ().values.push_back (std::move (result));
+            if (!this->results.objects.empty () && this->result) {
+                this->results.objects.back ().members.push_back (std::move (result));
                 this->result.key.clear ();
                 this->result.value.clear ();
                 this->result.body = {};

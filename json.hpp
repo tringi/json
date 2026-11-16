@@ -58,16 +58,16 @@ namespace ext::json {
         //  - members 
         //
         struct set : result {
-            std::vector <result> values;
+            std::vector <result> members;
         };
 
-        // elements
-        //  - members, objects or array items (are 'values' too in JSON nomenclature)
+        // objects
+        //  - objects or array items (are 'values' too in JSON nomenclature)
         //
-        std::vector <set> elements;
+        std::vector <set> objects;
 
         explicit operator bool () const noexcept {
-            return !this->elements.empty ();
+            return !this->objects.empty ();
         }
     };
 

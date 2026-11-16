@@ -118,13 +118,13 @@ int main () {
         if (auto set = ext::json::query (text, &f0)) {
             printf ("QUERY list items found:\n");
 
-            for (auto & o : set.elements) {
+            for (auto & o : set.objects) {
                 printf ("ROW: %zu\n", o.line);
                 printf ("KEY"); print (o.key);
                 printf ("VAL"); print (o.value);
                 //printf ("BODY: '%.*s'\n\n", (int) o.body.size (), o.body.data ());
 
-                for (auto & r : o.values) {
+                for (auto & r : o.members) {
                     printf ("  ROW: %zu\n", r.line);
                     printf ("    KEY: "); print (r.key);
                     printf ("    VAL: "); print (r.value);
@@ -156,13 +156,13 @@ int main () {
         if (auto set = ext::json::query (text, &f0)) {
             printf ("QUERY currency&value found:\n");
 
-            for (auto & o : set.elements) {
+            for (auto & o : set.objects) {
                 printf ("ROW: %zu\n", o.line);
                 printf ("KEY"); print (o.key);
                 printf ("VAL"); print (o.value);
                 // printf ("BODY: '%.*s'\n\n", (int) o.body.size (), o.body.data ());
 
-                for (auto & r : o.values) {
+                for (auto & r : o.members) {
                     printf ("  ROW: %zu\n", r.line);
                     printf ("    KEY: "); print (r.key);
                     printf ("    VAL: "); print (r.value);
