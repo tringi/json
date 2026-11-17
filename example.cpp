@@ -111,7 +111,7 @@ int main () {
         f.push_back ("list"sv);               // querying set of "list" elements
         f.push_back (ext::json::rule::empty); // array items don't have keys
 
-        if (auto set = ext::json::query (text, { ext::json::rule::empty, "list"sv, ext::json::rule::empty })) {
+        if (auto set = ext::json::query (text, f)) {
             printf ("QUERY list items found:\n");
 
             for (auto & o : set.objects) {
