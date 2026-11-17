@@ -1,18 +1,18 @@
 # ext::json
-A simple permissive [JSON](https://www.json.org/json-en.html) parser.
-Walks the input text and returns reference(s) to data matching the filter.
+A simple permissive [JSON](https://www.json.org/json-en.html) parser. Pure C++.
+Walks the input text and returns reference(s) to data matching the filter, think XPath but dumber.
 Supports several extensions and unescaping into UTF-8.
 
 ## Features
 
 * No tree construction, just parsing
-* Search value/member/objects according to a filter
-* Returns views into the original input
-* Function to unescape to UTF-8 (supports surrogate pairs)
+* Searches value/member/objects according to a filter
+* Returns views into the original input, no conversions
+* Exrea function to unescape to UTF-8 (supports surrogate pairs)
 * Transparently recovers from various syntax errors
 * Extension: Multi-token keys and values
 * Extension: Extra escape characters: `\v`, `\e` and `\'`
-* Extension: C style comments
+* Extension: C/C++ style comments
 
 ## Unified syntax
 
@@ -53,7 +53,26 @@ Exceptions:
 
 ## Examples
 
-TODO
+    auto text = R"(
+    {
+        "object" : {
+            "currency": "CZK",
+            "value" : 42.00,
+        }
+    }
+    )"sv;
+
+    if (auto r = ext::json::get (text, { ""sv, "object"sv, "value"sv })) {
+        printf ("'%.*s' on LINE %zu\n", (int) r.token.size (), r.token.data (), r.line);
+    }
+
+Expected output is:
+
+    '42.00' on LINE 5
+
+## Performance
+
+It's probably the slowest JSON parser, because of constant allocations in token vectors.
 
 ## License
 
