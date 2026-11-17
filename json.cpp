@@ -1,5 +1,4 @@
 #include "json.hpp"
-#include <cctype>
 //#include <unordered_map>
 
 #ifdef _MSC_VER
@@ -33,21 +32,33 @@ namespace {
         std::size_t         offset = 0;
         std::vector <bool>  nesting; // false for object, true for array
         std::vector <reference> tokens;
-        //std::unordered_map <void *, bool> opt;
+        // std::unordered_map <char *, bool> opt;
+
+        const std::string_view       text;
+        const std::vector <filter> & filters;
 
     public: // out
-        result              result;
-        results             results;
+        results results;
+        result  result;
 
-    public: // in
-        std::string_view    text;
-        std::vector <filter> filters;
-        bool                single_result = false;
-        std::size_t         max_nesting_depth = 0; // parser will fail on recursion into subobjects/arrays this deep
+    public: // options
+
+        // single_result
+        //  - if true process will bail after first matching result is found
+        //
+        bool single_result = false;
+
+        // max_nesting_depth
+        //  - parser will fail on recursion into subobjects/arrays this deep
+        //  - maximum: stack size remaining / ~256
+        //
+        std::size_t max_nesting_depth = 1024;
 
     public:
-        context () {
-            this->max_nesting_depth = 1024; // maximum: stack size remaining / ~256
+        context (std::string_view text, const std::vector <filter> & filters)
+            : text (text)
+            , filters (filters) { // 
+
             this->nesting.reserve (64); // 8 bytes
             this->tokens.reserve (3); // valid standard JSON can't have more than 3
         }
@@ -90,7 +101,7 @@ namespace {
                             }
 
                             const auto f = at_last_filter_level ();
-                            const auto s = skip || (f && !this->consider (f));
+                            const auto s = skip || (f && !this->consider ());
                             const bool p = !s && !this->single_result && this->at_next_to_last_filter ();
                             const auto o = offset++;
 
@@ -151,16 +162,13 @@ namespace {
         bool at_next_to_last_filter () const {
             return this->nesting.size () == this->filters.size () - 3;
         }
-        const filter * at_last_filter_level () const {
-            if (this->nesting.size () == this->filters.size () - 1) {
-                return &this->filters.back ();
-            } else
-                return nullptr;
+        bool at_last_filter_level () const {
+            return this->nesting.size () == this->filters.size () - 1;
         }
 
         bool finish_member () {
-            if (auto f = this->at_last_filter_level ()) {
-                if (this->consider (f)) {
+            if (this->at_last_filter_level ()) {
+                if (this->consider ()) {
                     if (this->collect ())
                         return true;
                 }
@@ -172,7 +180,7 @@ namespace {
             return false;
         }
 
-        bool consider (const filter * filter) {
+        bool consider () {
 
             // split sequence into key and value by first plain ':'
 
@@ -189,7 +197,7 @@ namespace {
 
             // match against filter rules
 
-            for (auto & rule : filter->rules) {
+            for (auto & rule : this->filters.back ().rules) {
                 if (match (rule))
                     return true;
             }
@@ -282,16 +290,26 @@ namespace {
                 offset = text.length ();
         }
 
+        static bool is_digit (char c) noexcept {
+            return c >= '0' && c <= '9';
+        }
+        static bool is_hex_digit (char c) noexcept {
+            if (c >= '0' && c <= '9') return true;
+            if (c >= 'A' && c <= 'F') return true;
+            if (c >= 'a' && c <= 'f') return true;
+            return false;
+        }
+
         void skip_escape_sequence () noexcept {
             ++offset;
             switch (text [offset++]) { // this automatically skips any \' \" \n \t and so
                 case '0': break;
-                case 'x': this->skip_sequence (2, std::isxdigit); break;
-                case 'u': this->skip_sequence (4, std::isxdigit); break;
+                case 'x': this->skip_sequence (2, is_hex_digit); break;
+                case 'u': this->skip_sequence (4, is_hex_digit); break;
 
                 default:
-                    if (std::isdigit (text [offset])) {
-                        this->skip_sequence (std::isdigit); // octal?
+                    if (is_digit (text [offset])) {
+                        this->skip_sequence (is_digit); // octal?
                     }
             }
         }
@@ -377,26 +395,33 @@ namespace {
         }
     };
 
+    bool char_to_hex (char c, std::uint32_t * number) noexcept {
+        if (c >= '0' && c <= '9') { *number = c - '0'; return true; }
+        if (c >= 'A' && c <= 'F') { *number = c - 'A' + 10; return true; }
+        if (c >= 'a' && c <= 'f') { *number = c - 'a' + 10; return true; }
+        return false;
+    }
+
     // consume_hexadecimal_number
     //  - reads 'max' hexadecimal characters from 's' and converts them to a number
     //  - advances 's' by the number of characters consumed
     //  - returns 0 on failure
     //
-    std::uint32_t consume_hexadecimal_number (std::string_view & s, std::size_t max) {
-
-        char numbers [9];
+    std::uint32_t consume_hexadecimal_number (std::string_view & s, std::size_t max) noexcept {
+        std::uint32_t r = 0;
+        std::uint32_t n = 0;
         std::size_t i = 0;
 
-        while ((i != max) && (i < s.length ()) && std::isxdigit (s [i])) {
-            numbers [i] = s [i];
+        while ((i != max) && (i < s.length ()) && char_to_hex (s [i], &n)) {
+            r <<= 4;
+            r += n;
             ++i;
         }
-        numbers [i] = '\0';
         s.remove_prefix (i);
-        return std::strtoul (numbers, nullptr, 16);
+        return r;
     }
 
-    std::size_t count_escapes (const std::string_view & s) {
+    std::size_t count_escapes (const std::string_view & s) noexcept {
         std::size_t n = 0;
         std::size_t i = std::string_view::npos;
 
@@ -408,7 +433,7 @@ namespace {
         return n;
     }
 
-    std::size_t count_escapes (const std::string_view & s, char c) {
+    std::size_t count_escapes (const std::string_view & s, char c) noexcept {
         std::size_t n = 0;
         std::size_t i = std::string_view::npos;
 
@@ -470,18 +495,14 @@ namespace {
 
 ext::json::results
 ext::json::query (std::string_view text, const std::vector <filter> & filters) {
-    context c;
-    c.text = text;
-    c.filters = filters;
+    context c (text, filters);
     c.process (false);
     return c.results;
 }
 
 ext::json::result
 ext::json::query1 (std::string_view text, const std::vector <filter> & filters) {
-    context c;
-    c.text = text;
-    c.filters = filters;
+    context c (text, filters);
     c.single_result = true;
     c.process (false);
     return c.result;
