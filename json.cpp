@@ -41,6 +41,7 @@ namespace {
 
     public: // in
         std::string_view    text;
+        std::vector <filter> filters;
         bool                single_result = false;
         std::size_t         max_nesting_depth = 0; // parser will fail on recursion into subobjects/arrays this deep
 
@@ -51,7 +52,7 @@ namespace {
             this->tokens.reserve (3); // valid standard JSON can't have more than 3
         }
 
-        bool process (bool skip, const filter * filter) {
+        bool process (bool skip) {
             tokens.clear ();
             while (offset != text.length ()) {
 
@@ -76,7 +77,7 @@ namespace {
                             break;
 
                         case ',':
-                            if (this->finish_member (filter))
+                            if (this->finish_member ())
                                 return true;
 
                             break;
@@ -88,8 +89,9 @@ namespace {
                                     throw recursion_exceeded (this->max_nesting_depth);
                             }
 
-                            const auto s = skip || (filter && !this->consider (*filter));
-                            const bool p = !s && !this->single_result && filter && filter->next && (filter->next->next == nullptr);
+                            const auto f = at_last_filter_level ();
+                            const auto s = skip || (f && !this->consider (f));
+                            const bool p = !s && !this->single_result && this->at_next_to_last_filter ();
                             const auto o = offset++;
 
                             if (p) {
@@ -100,7 +102,7 @@ namespace {
                             }
 
                             this->nesting.push_back (text [o] == '[');
-                            if (this->process (s, filter ? filter->next : nullptr))
+                            if (this->process (s))
                                 return true;
 
                             this->nesting.pop_back ();
@@ -113,7 +115,7 @@ namespace {
                                     this->results.objects.back ().body = text.substr (o, offset - o);
                                 }
 
-                                if (filter && (filter->next == nullptr))
+                                if (f)
                                     if (this->collect ())
                                         return true;
                             }
@@ -129,7 +131,7 @@ namespace {
                         case '}':
                         case ']':
                             if (!this->nesting.empty () && (this->nesting.back () == (text [offset] == ']'))) { // correct ending
-                                return this->finish_member (filter);
+                                return this->finish_member ();
 
                             } else {
                                 this->consume_character (skip);
@@ -146,9 +148,19 @@ namespace {
             return false;
         }
 
-        bool finish_member (const filter * filter) {
-            if (filter && (filter->next == nullptr)) {
-                if (this->consider (*filter)) {
+        bool at_next_to_last_filter () const {
+            return this->nesting.size () == this->filters.size () - 3;
+        }
+        const filter * at_last_filter_level () const {
+            if (this->nesting.size () == this->filters.size () - 1) {
+                return &this->filters.back ();
+            } else
+                return nullptr;
+        }
+
+        bool finish_member () {
+            if (auto f = this->at_last_filter_level ()) {
+                if (this->consider (f)) {
                     if (this->collect ())
                         return true;
                 }
@@ -160,7 +172,7 @@ namespace {
             return false;
         }
 
-        bool consider (const filter & filter) {
+        bool consider (const filter * filter) {
 
             // split sequence into key and value by first plain ':'
 
@@ -177,7 +189,7 @@ namespace {
 
             // match against filter rules
 
-            for (auto & rule : filter.rules) {
+            for (auto & rule : filter->rules) {
                 if (match (rule))
                     return true;
             }
@@ -434,8 +446,6 @@ namespace {
             s.remove_prefix (1);
 
             if (!s.empty ()) {
-
-                std::uint32_t r = 0;
                 switch (s.front ()) {
                     case 'u': s.remove_prefix (1); return consume_hexadecimal_number (s, 4);
                     case 'x': s.remove_prefix (1); return consume_hexadecimal_number (s, 2);
@@ -459,19 +469,21 @@ namespace {
 }
 
 ext::json::results
-ext::json::query (std::string_view text, const filter * filter) {
+ext::json::query (std::string_view text, const std::vector <filter> & filters) {
     context c;
     c.text = text;
-    c.process (false, filter);
+    c.filters = filters;
+    c.process (false);
     return c.results;
 }
 
 ext::json::result
-ext::json::query1 (std::string_view text, const filter * filter) {
+ext::json::query1 (std::string_view text, const std::vector <filter> & filters) {
     context c;
     c.text = text;
+    c.filters = filters;
     c.single_result = true;
-    c.process (false, filter);
+    c.process (false);
     return c.result;
 }
 
@@ -485,14 +497,10 @@ ext::json::find (std::string_view text, std::initializer_list <std::string_view>
     for (auto key : keys) {
         f [i].rules.resize (1);
         f [i].rules [0].tokens.push_back (key.empty () ? ext::json::rule::empty : key);
-
-        if (i + 1 != f.size ()) {
-            f [i].next = &f [i + 1];
-        }
         ++i;
     }
 
-    return ext::json::query1 (text, &f [0]);
+    return ext::json::query1 (text, f);
 }
 
 ext::json::reference

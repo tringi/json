@@ -102,7 +102,8 @@ namespace ext::json {
     };
 
     // filter
-    //  - set of 'rules' in a singly linked list, one per each nesting level in the JSON text
+    //  - set of 'rules', matching either suffices
+    //  - passed as a vector, one item per nesting level in the JSON text
     //
     struct filter {
 
@@ -112,10 +113,12 @@ namespace ext::json {
         //
         std::vector <rule> rules;
 
-        // next
-        //  - filters are chained via this pointer
-        //
-        const filter * next = nullptr;
+    public:
+        filter () = default;
+        filter (const std::string_view & key) {
+            this->rules.resize (1);
+            this->rules.front ().tokens.push_back (key);
+        }
     };
 
     // ext::json exceptions
@@ -147,12 +150,12 @@ namespace ext::json {
     //  - full query for a single result
     //  - NOTE: no empty string_view substitution is performed
     //
-    result query1 (std::string_view json, const filter * filter);
+    result query1 (std::string_view json, const std::vector <filter> & filters);
 
     // query
     //  - complete query for potentially multiple sets of members
     //
-    results query (std::string_view json, const filter * filter);
+    results query (std::string_view json, const std::vector <filter> & filters);
 
     // unescape
     //  - replaces all escape sequences with corresponding characters
