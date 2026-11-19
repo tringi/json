@@ -57,7 +57,7 @@ namespace {
     public:
         context (std::string_view text, const std::vector <filter> & filters)
             : text (text)
-            , filters (filters) { // 
+            , filters (filters) {
 
             this->nesting.reserve (64); // 8 bytes
             this->tokens.reserve (3); // valid standard JSON can't have more than 3
@@ -88,7 +88,7 @@ namespace {
                             break;
 
                         case ',':
-                            if (this->finish_member ())
+                            if (this->finish_member (skip))
                                 return true;
 
                             break;
@@ -101,7 +101,7 @@ namespace {
                             }
 
                             const auto f = at_last_filter_level ();
-                            const auto s = skip || (f && !this->consider ());
+                            const auto s = skip || !this->consider ();
                             const bool p = !s && !this->single_result && this->at_next_to_last_filter ();
                             const auto o = offset++;
 
@@ -142,7 +142,7 @@ namespace {
                         case '}':
                         case ']':
                             if (!this->nesting.empty () && (this->nesting.back () == (text [offset] == ']'))) { // correct ending
-                                return this->finish_member ();
+                                return this->finish_member (skip);
 
                             } else {
                                 this->consume_character (skip);
@@ -160,14 +160,14 @@ namespace {
         }
 
         bool at_next_to_last_filter () const {
-            return this->nesting.size () == this->filters.size () - 3;
+            return this->nesting.size () + 3 == this->filters.size ();
         }
         bool at_last_filter_level () const {
-            return this->nesting.size () == this->filters.size () - 1;
+            return this->nesting.size () + 1 == this->filters.size ();
         }
 
-        bool finish_member () {
-            if (this->at_last_filter_level ()) {
+        bool finish_member (bool skip) {
+            if (!skip) {
                 if (this->consider ()) {
                     if (this->collect ())
                         return true;
@@ -181,6 +181,8 @@ namespace {
         }
 
         bool consider () {
+            if (this->nesting.size () >= this->filters.size ())
+                return false;
 
             // split sequence into key and value by first plain ':'
 
@@ -197,7 +199,7 @@ namespace {
 
             // match against filter rules
 
-            for (auto & rule : this->filters.back ().rules) {
+            for (auto & rule : this->filters [this->nesting.size ()].rules) {
                 if (match (rule))
                     return true;
             }
@@ -237,15 +239,10 @@ namespace {
             if (this->single_result)
                 return true;
 
-            // TODO: testing for empty result is temporary workaround for a bug somewhere
-            //       passing wrong items here or not cleaning up something somewhere
-
-            if (!this->results.objects.empty () && this->result) {
-                this->results.objects.back ().members.push_back (std::move (result));
-                this->result.key.clear ();
-                this->result.value.clear ();
-                this->result.body = {};
-            }
+            this->results.objects.back ().members.push_back (std::move (result));
+            this->result.key.clear ();
+            this->result.value.clear ();
+            this->result.body = {};
             return false;
         }
 
